@@ -15,6 +15,8 @@ import {
   loadDefaultLayout,
 } from "./assetLoader.js";
 import type { TrackedAgent, ServerMessage } from "./types.js";
+import { NeuraMdClient } from "./neuramd-client.js";
+import { InboxPoller, type BubbleEvent } from "./inbox-poller.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || "3456", 10);
@@ -286,6 +288,32 @@ watcher.on("line", (file: WatchedFile, line: string) => {
   processTranscriptLine(line, agent, broadcast);
 });
 
+// NeuraMD MCP gateway integration (optional).
+// When NEURAMD_GATEWAY_URL + NEURAMD_GATEWAY_TOKEN are set, periodically
+// poll the bound viewer's inbox and broadcast each new message as a speech
+// bubble anchored on the sender's slug. Skipped silently for non-NeuraMD
+// users so upstream standalone usage stays unchanged.
+const neuramdClient = NeuraMdClient.fromEnv();
+let inboxPoller: InboxPoller | null = null;
+if (neuramdClient) {
+  inboxPoller = new InboxPoller({ client: neuramdClient });
+  inboxPoller.on("bubble", (event: BubbleEvent) => {
+    broadcast({
+      type: "agentSpeechBubble",
+      bubbleOnSlug: event.bubbleOnSlug,
+      fromTitle: event.message.fromTitle,
+      content: event.message.content,
+      messageId: event.message.id,
+      createdAt: event.message.createdAt,
+    });
+    lastActivityTime = Date.now();
+  });
+  inboxPoller.start();
+  console.log("[Server] NeuraMD inbox poller enabled (gateway configured).");
+} else {
+  console.log("[Server] NeuraMD inbox poller disabled (NEURAMD_GATEWAY_URL/TOKEN not set).");
+}
+
 // Start
 watcher.start();
 server.listen(PORT, () => {
@@ -305,6 +333,7 @@ setInterval(() => {
 
 // Graceful shutdown
 process.on("SIGINT", () => {
+  inboxPoller?.stop();
   watcher.stop();
   server.close();
   process.exit(0);

@@ -50,6 +50,12 @@ export type ServerMessage =
   | { type: "subagentToolDone"; id: number; parentToolId: string; toolId: string }
   | { type: "subagentToolPermission"; id: number; parentToolId: string }
   | { type: "subagentClear"; id: number; parentToolId: string }
+  // NeuraMD inbox bubble: emitted when the viewer's inbox receives a new
+  // message. `bubbleOnSlug` is the sender's note slug — the webview maps it
+  // to a character (or shows a fallback overlay when no character matches).
+  // Wiring (server→client) lands in this PR; the webview rendering is a
+  // follow-up that consumes this message type without server changes.
+  | { type: "agentSpeechBubble"; bubbleOnSlug: string; fromTitle: string; content: string; messageId: string; createdAt: string }
   | { type: "characterSpritesLoaded"; characters: unknown[] }
   | { type: "floorTilesLoaded"; sprites: unknown[] }
   | { type: "wallTilesLoaded"; sprites: unknown[] }
