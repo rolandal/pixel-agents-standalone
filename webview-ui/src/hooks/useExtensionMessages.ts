@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { OfficeState } from '../office/engine/officeState.js'
 import type { OfficeLayout, ToolActivity } from '../office/types.js'
 import { extractToolName } from '../office/toolUtils.js'
@@ -9,6 +9,7 @@ import { setWallSprites } from '../office/wallTiles.js'
 import { setCharacterTemplates } from '../office/sprites/spriteData.js'
 import { vscode } from '../vscodeApi.js'
 import { playDoneSound, setSoundEnabled } from '../notificationSound.js'
+import type { Bubble } from '../components/SpeechBubbleStack.js'
 
 export interface SubagentCharacter {
   id: number
@@ -50,6 +51,10 @@ export interface ExtensionMessageState {
   layoutReady: boolean
   loadedAssets?: { catalog: FurnitureAsset[]; sprites: Record<string, string[][]> }
   workspaceFolders: WorkspaceFolder[]
+  // NeuraMD inbox bubbles (A4). Empty unless the server has the gateway env
+  // configured. Caller renders <SpeechBubbleStack bubbles=... onDismiss=... />.
+  speechBubbles: Bubble[]
+  dismissBubble: (id: string) => void
 }
 
 function saveAgentSeats(os: OfficeState): void {
@@ -75,6 +80,10 @@ export function useExtensionMessages(
   const [layoutReady, setLayoutReady] = useState(false)
   const [loadedAssets, setLoadedAssets] = useState<{ catalog: FurnitureAsset[]; sprites: Record<string, string[][]> } | undefined>()
   const [workspaceFolders, setWorkspaceFolders] = useState<WorkspaceFolder[]>([])
+  const [speechBubbles, setSpeechBubbles] = useState<Bubble[]>([])
+  const dismissBubble = useCallback((id: string) => {
+    setSpeechBubbles((prev) => prev.filter((b) => b.id !== id))
+  }, [])
 
   // Track whether initial layout has been loaded (ref to avoid re-render)
   const layoutReadyRef = useRef(false)
@@ -353,6 +362,19 @@ export function useExtensionMessages(
         } catch (err) {
           console.error(`❌ Webview: Error processing furnitureAssetsLoaded:`, err)
         }
+      } else if (msg.type === 'agentSpeechBubble') {
+        // NeuraMD inbox surface (A4). De-dupe by messageId so reconnects /
+        // late deliveries don't double-render. Stack append, oldest first;
+        // SpeechBubbleStack picks the latest MAX_VISIBLE for display.
+        const bubble: Bubble = {
+          id: String(msg.messageId ?? ''),
+          bubbleOnSlug: String(msg.bubbleOnSlug ?? ''),
+          fromTitle: String(msg.fromTitle ?? ''),
+          content: String(msg.content ?? ''),
+          createdAt: String(msg.createdAt ?? ''),
+        }
+        if (!bubble.id) return
+        setSpeechBubbles((prev) => (prev.some((b) => b.id === bubble.id) ? prev : [...prev, bubble]))
       }
     }
     window.addEventListener('message', handler)
@@ -360,5 +382,17 @@ export function useExtensionMessages(
     return () => window.removeEventListener('message', handler)
   }, [getOfficeState])
 
-  return { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders }
+  return {
+    agents,
+    selectedAgent,
+    agentTools,
+    agentStatuses,
+    subagentTools,
+    subagentCharacters,
+    layoutReady,
+    loadedAssets,
+    workspaceFolders,
+    speechBubbles,
+    dismissBubble,
+  }
 }
