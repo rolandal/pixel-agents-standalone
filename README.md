@@ -64,7 +64,7 @@ Runs the Express server (with hot reload) and Vite dev server concurrently.
 
 ## Office Tileset
 
-The built-in layout uses basic furniture (desks, chairs, plants). For the full 452-piece furniture catalog, purchase the [Office Interior Tileset](https://donarg.itch.io/office-interior-tileset-16x16) by Donarg ($2 on itch.io), place it at `assets/office_tileset_16x16.png`, and run:
+The built-in layout uses basic furniture (desks, chairs, plants). For the full 452-piece furniture catalog, purchase the [Office Interior Tileset](https://donarg.itch.io/officetileset) by Donarg ($2 on itch.io), place it at `assets/office_tileset_16x16.png`, and run:
 
 ```bash
 npm run extract-furniture
@@ -73,7 +73,7 @@ npm run extract-furniture
 ## Credits
 
 - **[pixel-agents](https://github.com/pablodelucca/pixel-agents)** by Pablo De Lucca — original VS Code extension (MIT License)
-- **[Office Interior Tileset](https://donarg.itch.io/office-interior-tileset-16x16)** by Donarg — pixel art furniture (purchased separately)
+- **[Office Interior Tileset](https://donarg.itch.io/officetileset)** by Donarg — pixel art furniture (purchased separately)
 
 ## License
 
