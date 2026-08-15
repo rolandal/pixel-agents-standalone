@@ -12,6 +12,12 @@ export interface ActiveTool {
 export interface TrackedAgent {
   id: number;
   sessionId: string;
+  // NeuraMD tentacle UUID extracted from the JSONL project dir (when the
+  // session is hosted by a NeuraMD tentacle runtime). Stable across Claude
+  // TUI restarts of the same tentacle, so it's the persistent identity key
+  // (see server/identity.ts). Null for non-NeuraMD sessions, where sessionId
+  // remains the only identity.
+  tentacleUuid: string | null;
   projectDir: string;
   projectName: string;
   jsonlFile: string;

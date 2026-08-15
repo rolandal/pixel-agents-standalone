@@ -21,10 +21,17 @@ const PORT = parseInt(process.env.PORT || "3456", 10);
 const IDLE_SHUTDOWN_MS = 600_000; // 10 minutes
 
 // State
-const agents = new Map<string, TrackedAgent>(); // sessionId -> agent
+// Keyed by persistent identity: tentacleUuid for NeuraMD-hosted sessions
+// (stable across Claude TUI restarts), sessionId for everything else.
+// See server/identity.ts.
+const agents = new Map<string, TrackedAgent>();
 let nextAgentId = 1;
 const clients = new Set<WebSocket>();
 let lastActivityTime = Date.now();
+
+function identityKeyForFile(file: WatchedFile): string {
+  return file.tentacleUuid ?? file.sessionId;
+}
 
 // Load assets at startup
 // In dev mode (tsx), __dirname is server/ so assets are at ../webview-ui/public/assets/
@@ -206,12 +213,31 @@ wss.on("connection", (ws) => {
 const watcher = new JsonlWatcher();
 
 watcher.on("fileAdded", (file: WatchedFile) => {
-  if (agents.has(file.sessionId)) return;
+  const key = identityKeyForFile(file);
+  const existing = agents.get(key);
   lastActivityTime = Date.now();
+
+  if (existing) {
+    // Same persistent identity (NeuraMD tentacle UUID), new Claude TUI session.
+    // Re-attach the agent to the new JSONL — keeps the character in place
+    // instead of spawning a fresh one for every restart of the same tentacle.
+    existing.sessionId = file.sessionId;
+    existing.jsonlFile = file.path;
+    existing.projectDir = dirname(file.path);
+    existing.fileOffset = 0;
+    existing.lineBuffer = "";
+    existing.lastActivityTime = Date.now();
+    console.log(
+      `Agent ${existing.id} re-attached: ${existing.projectName} ` +
+      `(uuid=${file.tentacleUuid?.slice(0, 8) ?? "n/a"}, new session=${file.sessionId.slice(0, 8)})`,
+    );
+    return;
+  }
 
   const agent: TrackedAgent = {
     id: nextAgentId++,
     sessionId: file.sessionId,
+    tentacleUuid: file.tentacleUuid,
     projectDir: dirname(file.path),
     projectName: file.projectName,
     jsonlFile: file.path,
@@ -228,22 +254,32 @@ watcher.on("fileAdded", (file: WatchedFile) => {
     lastActivityTime: Date.now(),
   };
 
-  agents.set(file.sessionId, agent);
+  agents.set(key, agent);
   broadcast({ type: "agentCreated", id: agent.id, folderName: agent.projectName });
-  console.log(`Agent ${agent.id} joined: ${agent.projectName} (${file.sessionId.slice(0, 8)})`);
+  console.log(
+    `Agent ${agent.id} joined: ${agent.projectName} ` +
+    `(${file.tentacleUuid ? `uuid=${file.tentacleUuid.slice(0, 8)}` : `session=${file.sessionId.slice(0, 8)}`})`,
+  );
 });
 
 watcher.on("fileRemoved", (file: WatchedFile) => {
-  const agent = agents.get(file.sessionId);
+  const key = identityKeyForFile(file);
+  const agent = agents.get(key);
   if (!agent) return;
 
-  agents.delete(file.sessionId);
+  // Don't kill the character if the agent has already been re-attached to a
+  // newer session — only the file that the agent currently watches counts.
+  // Without this guard, an old session aging out of the watcher would close
+  // the character even though the tentacle is still alive on a new JSONL.
+  if (agent.jsonlFile !== file.path) return;
+
+  agents.delete(key);
   broadcast({ type: "agentClosed", id: agent.id });
   console.log(`Agent ${agent.id} left: ${agent.projectName}`);
 });
 
 watcher.on("line", (file: WatchedFile, line: string) => {
-  const agent = agents.get(file.sessionId);
+  const agent = agents.get(identityKeyForFile(file));
   if (!agent) return;
   lastActivityTime = Date.now();
 

@@ -3,6 +3,7 @@ import { statSync, readdirSync, openSync, readSync, closeSync } from "fs";
 import { join, basename, dirname } from "path";
 import { homedir } from "os";
 import { EventEmitter } from "events";
+import { extractTentacleUuid } from "./identity.js";
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 const ACTIVE_THRESHOLD_MS = 600_000; // 10 minutes — Claude can think for 5+ min without writing
@@ -12,6 +13,14 @@ export interface WatchedFile {
   path: string;
   sessionId: string;
   projectName: string;
+  // Raw flattened-path basename of the JSONL's parent dir
+  // (e.g. "-home-rafael-apps-NeuraMD-tmp-tentacles-<uuid>"). Exposed so the
+  // server layer can derive a persistent identity key, instead of having to
+  // re-derive it from `path`.
+  projectDirName: string;
+  // NeuraMD tentacle UUID extracted from projectDirName, or null for regular
+  // (non-NeuraMD) Claude sessions. Acts as the persistent identity.
+  tentacleUuid: string | null;
   offset: number;
   lineBuffer: string;
 }
@@ -76,11 +85,14 @@ export class JsonlWatcher extends EventEmitter {
     // Extract short project name: "-Users-alice-Documents-myproject-657" -> "657"
     const parts = projectDirName.split("-").filter(Boolean);
     const projectName = parts[parts.length - 1] || sessionId.slice(0, 8);
+    const tentacleUuid = extractTentacleUuid(projectDirName);
 
     const file: WatchedFile = {
       path: filePath,
       sessionId,
       projectName,
+      projectDirName,
+      tentacleUuid,
       offset: 0,
       lineBuffer: "",
     };
