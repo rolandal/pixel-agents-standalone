@@ -11,6 +11,8 @@
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --outfile=dist/server.js --external:chokidar --external:ws --external:express --external:pngjs",
     "build:ui": "cd webview-ui && npx vite build --outDir ../dist/public && cp -r public/assets ../dist/public/assets",
     "start": "node dist/server.js",
+    "test": "tsx --test server/__tests__/*.test.ts",
+    "typecheck": "tsc --noEmit",
     "import-tileset": "tsx scripts/import-tileset.ts",
     "extract-furniture": "tsx scripts/extract-furniture.ts"
   },
