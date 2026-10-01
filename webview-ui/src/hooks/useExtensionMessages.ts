@@ -119,6 +119,15 @@ export function useExtensionMessages(
         setSelectedAgent(id)
         os.addAgent(id, undefined, undefined, undefined, undefined, folderName)
         saveAgentSeats(os)
+      } else if (msg.type === 'agentRenamed') {
+        const id = msg.id as number
+        const folderName = msg.folderName as string | undefined
+        if (folderName) {
+          os.renameAgent(id, folderName)
+          // Character labels are drawn from officeState in the overlay's render;
+          // nudge React so the new name paints without waiting for another event.
+          setAgents((prev) => [...prev])
+        }
       } else if (msg.type === 'agentClosed') {
         const id = msg.id as number
         setAgents((prev) => prev.filter((a) => a !== id))

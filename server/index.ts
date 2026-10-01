@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { JsonlWatcher, type WatchedFile } from "./watcher.js";
 import { processTranscriptLine } from "./parser.js";
+import { resolveSubagentName } from "./subagentNames.js";
 import {
   loadCharacterSprites,
   loadWallTiles,
@@ -144,7 +145,7 @@ function sendInitialData(ws: WebSocket): void {
   const folderNames: Record<number, string> = {};
   const agentMeta: Record<number, { palette?: number; hueShift?: number; seatId?: string }> = {};
   for (const a of agentList) {
-    folderNames[a.id] = a.projectName;
+    folderNames[a.id] = a.displayName ?? a.projectName;
     if (persistedSeats?.[a.id]) {
       const s = persistedSeats[a.id];
       agentMeta[a.id] = { palette: s.palette, hueShift: s.hueShift, seatId: s.seatId ?? undefined };
@@ -229,9 +230,41 @@ watcher.on("fileAdded", (file: WatchedFile) => {
   };
 
   agents.set(file.sessionId, agent);
-  broadcast({ type: "agentCreated", id: agent.id, folderName: agent.projectName });
-  console.log(`Agent ${agent.id} joined: ${agent.projectName} (${file.sessionId.slice(0, 8)})`);
+
+  // Background subagents land as agent-<id>.jsonl under <session>/subagents/ and
+  // would otherwise inherit the folder name ("subagents"). Resolve their real
+  // agentType from the sidecar meta.json. If the sidecar isn't written yet, a
+  // short async retry renames the character once it appears.
+  if (file.sessionId.startsWith("agent-")) {
+    const resolved = resolveSubagentName(agent.jsonlFile);
+    if (resolved) {
+      agent.displayName = resolved;
+    } else {
+      scheduleNameResolve(agent, 0);
+    }
+  }
+
+  broadcast({ type: "agentCreated", id: agent.id, folderName: agent.displayName ?? agent.projectName });
+  console.log(`Agent ${agent.id} joined: ${agent.displayName ?? agent.projectName} (${file.sessionId.slice(0, 8)})`);
 });
+
+// Retry the parent-transcript join for a subagent whose launch metadata wasn't
+// written yet when its file first appeared; rename the character on success.
+function scheduleNameResolve(agent: TrackedAgent, attempt: number): void {
+  const MAX_ATTEMPTS = 6;
+  const RETRY_MS = 800;
+  setTimeout(() => {
+    if (!agents.has(agent.sessionId) || agent.displayName) return;
+    const resolved = resolveSubagentName(agent.jsonlFile);
+    if (resolved) {
+      agent.displayName = resolved;
+      broadcast({ type: "agentRenamed", id: agent.id, folderName: resolved });
+      console.log(`Agent ${agent.id} renamed: ${resolved}`);
+    } else if (attempt + 1 < MAX_ATTEMPTS) {
+      scheduleNameResolve(agent, attempt + 1);
+    }
+  }, RETRY_MS);
+}
 
 watcher.on("fileRemoved", (file: WatchedFile) => {
   const agent = agents.get(file.sessionId);

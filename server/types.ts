@@ -14,6 +14,7 @@ export interface TrackedAgent {
   sessionId: string;
   projectDir: string;
   projectName: string;
+  displayName?: string; // resolved subagent_type for agent-*.jsonl children
   jsonlFile: string;
   fileOffset: number;
   lineBuffer: string;
@@ -32,6 +33,7 @@ export interface TrackedAgent {
 // Must match the upstream message format expected by useExtensionMessages
 export type ServerMessage =
   | { type: "agentCreated"; id: number; folderName: string }
+  | { type: "agentRenamed"; id: number; folderName: string }
   | { type: "agentClosed"; id: number }
   | { type: "existingAgents"; agents: number[]; folderNames: Record<number, string>; agentMeta?: Record<number, { palette?: number; hueShift?: number; seatId?: string }> }
   | { type: "agentToolStart"; id: number; toolId: string; status: string }

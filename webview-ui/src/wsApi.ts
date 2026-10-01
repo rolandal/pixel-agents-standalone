@@ -1,7 +1,7 @@
 // WebSocket API — replaces VS Code postMessage bridge
 const WS_URL = import.meta.env.DEV
   ? "ws://localhost:3456"
-  : `ws://${window.location.host}`;
+  : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;

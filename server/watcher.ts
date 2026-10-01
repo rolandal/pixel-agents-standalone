@@ -4,7 +4,8 @@ import { join, basename, dirname } from "path";
 import { homedir } from "os";
 import { EventEmitter } from "events";
 
-const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
+const CLAUDE_PROJECTS_DIR =
+  process.env.PIXEL_AGENTS_PROJECTS_DIR || join(homedir(), ".claude", "projects");
 const ACTIVE_THRESHOLD_MS = 600_000; // 10 minutes — Claude can think for 5+ min without writing
 const POLL_INTERVAL_MS = 1000;
 

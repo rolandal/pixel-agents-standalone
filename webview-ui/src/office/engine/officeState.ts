@@ -247,6 +247,11 @@ export class OfficeState {
     this.characters.set(id, ch)
   }
 
+  renameAgent(id: number, folderName: string): void {
+    const ch = this.characters.get(id)
+    if (ch) ch.folderName = folderName
+  }
+
   removeAgent(id: number): void {
     const ch = this.characters.get(id)
     if (!ch) return
