@@ -35,6 +35,13 @@ export class JsonlWatcher extends EventEmitter {
       }
     });
 
+    // Filesystem interruptions can arrive asynchronously from chokidar. Without
+    // an error listener Node exits; the existing polling loop can keep running.
+    this.watcher.on("error", (error: Error) => {
+      console.warn(`[JsonlWatcher] File watcher error: ${error.message}`);
+      this.scanForActiveFiles();
+    });
+
     this.pollInterval = setInterval(() => this.pollFiles(), POLL_INTERVAL_MS);
   }
 
